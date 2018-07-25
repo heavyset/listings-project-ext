@@ -1,5 +1,7 @@
 /**
- * Filter Listings Project listings by category and ...
+ * @fileoverview Provides functionality around filtering listings in a Listings Project
+ * newsletter page. This is a web extension, content script that will add a "panel" to
+ * the top of any matching page and provide filtering elements.
  */
 
 const panelHTML = `
@@ -25,133 +27,191 @@ const panelHTML = `
 	</div>
 `;
 
-(function () {
-	let filterState = {
-		category: "",
-		frequency: "",
-		price: ""
-	};
+/**
+ * log is a custom `console.log` function that simply prefixes any log message with
+ * "[LP-EXT]". Anything that can be achieved with `console.log` will be achievable.
+ * with this function.
+ * @param {string} msg The msg to attach the prefix to
+ * @param {...args} args Arguments to pass to `console.log`
+ */
+function log(msg, ...args) {
+	console.log("[LP-EXT] " + msg, ...args);
+}
 
-	function applyFilterState(source) {
-		filterState = Object.assign(filterState, source);
-		return filterState;
+/**
+ * parseAttrJSON will parse the attribute value of an `Element` with the assumption
+ * that it is in JSON format. If the Element is not defined or the attribute cannot
+ * be parsed for any reason, an empty object is returned and a message logged.
+ * @param {!Element} $el The HTML Element to pull an attribute from
+ * @param {string} attrName The name of the attribute
+ * @return {object}
+ */
+function parseAttrJSON($el, attrName) {
+	if (!$el) {
+		log("element not defined");
+		return {};
+	}
+	try {
+		return JSON.parse($el.getAttribute(attrName)) || {};
+	} catch(err) {
+		log("unable to parse listings json: ", err);
+		return {};
+	}
+}
+
+function findMinMax(nums) {
+	return [ Math.min(...nums), Math.max(...nums) ];
+}
+
+/**
+ * This is a helper function for creating a new `ContextualFragement` instance from
+ * an string of HTML.
+ * @param {string} htmlStr A string of HTML to create a `ContextualFragment` from
+ * @return {!ContextualFragment}
+ */
+function parseFragment(htmlStr) {
+	return document.createRange().createContextualFragment(htmlStr);
+}
+
+/**
+ * `ListingsView` provides functionality around changing the view of the actual listings
+ * in the Listings Project page. It expects to be provided the top-level `Element` which
+ * contains these listings. This is most likely the element selected via the CSS query:
+ * `.newsletterSearch`.
+ */
+class ListingsView {
+	/**
+	 * @param {!Element} $el The HTML Element containing all listings
+	 */
+	constructor($el) {
+		this.$el = $el;
 	}
 
-	function log(...args) {
-		let [msg, ...opts] = args;
-		console.log("[LP-EXT] " + msg, ...opts);
-	}
-
-	function $newFrag(htmlStr) {
-		return document.createRange().createContextualFragment(htmlStr);
-	}
-
-	function $updateCategoryFilter($panel, categories) {
-		let $list = $panel.querySelector(".filter.categories select");
-		for (let category of categories.slice(1)) {
-			$list.appendChild($newFrag(`<option value="${category.value}">${category.label}</option>`));
+	/**
+	 * Hide every listing in the Listings Project view.
+	 * @return void
+	 */
+	hide() {
+		for (let $child of this.$el.querySelectorAll(":scope .search-listings-section > div")) {
+			$child.style.display = "none";
 		}
 	}
 
-	function $updatePriceFilter($panel, prices) {
-		let minPrice = Math.min(...prices),
-			maxPrice = Math.max(...prices);
-		let $slider = $panel.querySelector(".filter.price .price-slider");
-		noUiSlider.create($slider, {
-			start: [maxPrice],
-			connect: [true, false],
-			format: {
-				to: (num) => { return "$" + Math.trunc(num/100) },
-				from: (str) => { return parseInt(str.replace('$', '')) }
-			},
-			range: {
-				'min': [minPrice],
-				'50%': [Math.min(100000, Math.trunc(maxPrice/2)), 50000],
-				'max': [maxPrice]
-			}
-		});
-	}
-
-	function $hideAllListings() {
-		let $divs = document.querySelectorAll(".search-listings-section > div");
-		for (let $div of $divs) {
-			$div.style.display = "none";
-		}
-	}
-
-	function $updateListings(slugs) {
-		for (let i in slugs) {
-			let $listing = document.querySelector(`.row a[href*="${slugs[i]}"]`);
+	/**
+	 * Show any listings with a URI matching a slug from the provided Array. This is
+	 * definitely not an efficient way to do this.
+	 * @param {!Array<string>} slugs An array of slugs
+	 * @return void
+	 */
+	update(slugs) {
+		for (let idx in slugs) {
+			let $listing = this.$el.querySelector(`:scope .row a[href*="${slugs[idx]}"]`);
 			if ($listing) {
 				$listing.parentNode.parentNode.parentNode.style.display = "";
 			}
 		}
 	}
+}
 
-	function filterListing({category, price}, listing) {
-		let catMatch = (!category || listing.subcategory_key == category),
-			priceMatch = (!price || listing.price_cents <= price);
-		return catMatch && priceMatch;
-	}
+function buildPriceSlider($sliderView, minPrice, maxPrice) {
+	noUiSlider.create($sliderView, {
+		start: [maxPrice],
+		connect: [true, false],
+		format: {
+			to: (num) => { return "$" + Math.trunc(num/100) },
+			from: (str) => { return parseInt(str.replace('$', '')) }
+		},
+		range: {
+			'min': [minPrice],
+			'50%': [Math.min(100000, Math.trunc(maxPrice/2)), 50000],
+			'max': [maxPrice]
+		}
+	});
+	return $sliderView.noUiSlider;
+}
 
-	function filterListings(state, listings) {
-		let slugs = listings.filter(listing => filterListing(state, listing)).map(listing => listing.slug);
-		$hideAllListings();
-		$updateListings(slugs);
-	}
+class FilterView {
+	constructor($el, categories, minPrice, maxPrice) {
+		this.$el = $el;
+		this.evFns = {"change": []};
 
-	function $bindCategoryChangeEvents($panel, listings) {
-		$panel.querySelector(".filter.categories select").addEventListener("change", ({target}) => {
-			let category = target.value == "all" ? "" : target.value;
-			filterListings(applyFilterState({"category": target.value}), listings);
-		});
-	}
+		this.category = "";
+		this.frequency = "";
+		this.price = 0;
 
-	function $bindFrequencyChangeEvents($panel, listings) {
-		$panel.querySelector(".filter.categories select").addEventListener("change", ({target}) => {
-			let category = target.value == "all" ? "" : target.value;
-			filterListings(applyFilterState({"category": target.value}), listings);
-		});
-	}
+		for (let category of categories) {
+			this.addCategory(category.value, category.label);
+		}
 
-	function $bindSliderChangeEvents($panel, listings) {
-		let $slider = $panel.querySelector(".filter.price .price-slider").noUiSlider,
-			$maxPrice = $panel.querySelector(".max-price");
+		this.$slider = buildPriceSlider($el.querySelector(".filter.price .price-slider"), minPrice, maxPrice);
 
-		$slider.on("change", (strs, handles, [value]) => {
-			filterListings(applyFilterState({"price": Math.trunc(value)}), listings);
-		});
-
-		$slider.on("update", ([price]) => {
+		let $maxPrice = $el.querySelector(".max-price");
+		this.$slider.on("update", ([price]) => {
 			$maxPrice.innerHTML = price;
 		});
+
+		this.$slider.on("change", (strs, handles, [value]) => {
+			this.price = Math.trunc(value);
+			this._emit("change");
+		});
+
+		$el.querySelector(".filter.categories select").addEventListener("change", ({target}) => {
+			this.category = target.value == "all" ? "" : target.value;
+			this._emit("change");
+		});
+
+		$el.querySelector(".filter.frequency select").addEventListener("change", ({target}) => {
+			this.frequency = target.value == "all" ? "" : target.value;
+			this._emit("change");
+		});
 	}
 
-	function parseAttrJSON(el, attrName) {
-		if (!el) {
-			log("element not defined");
-			return {};
-		}
-		try {
-			return JSON.parse(el.getAttribute(attrName)) || {};
-		} catch(err) {
-			log("unable to parse listings json: ", err);
-			return {};
-		}
+	addCategory(key, label) {
+		this.$el.querySelector(".filter.categories select").
+			appendChild(parseFragment(`<option value="${key}">${label}</option>`));
 	}
 
-	let listingsData = parseAttrJSON(document.querySelector("div[data-react-props]"), "data-react-props");
-	log("found %d listings", listingsData.initialListings.length);
+	on(evName, fn) {
+		if (!this.evFns[evName]) {
+			this.evFns[evName] = [];
+		}
+		this.evFns[evName].push(fn);
+	}
 
-	// build filter panel
-	let $panel = $newFrag(panelHTML);
+	_emit(evName) {
+		let state = {
+			category: this.category,
+			frequency: this.frequency,
+			price: this.price
+		};
+		(this.evFns[evName] || []).forEach(fn => fn(state));
+	}
+}
 
-	$updateCategoryFilter($panel, listingsData.category_options);
-	$updatePriceFilter($panel, listingsData.initialListings.map(listing => listing.price_cents));
+function listingFilter({category, frequency, price}, listing) {
+	let catMatch = (!category || listing.subcategory_key == category),
+		freqMatch = (!frequency || listing.price_duration == frequency);
+		priceMatch = (!price || listing.price_cents <= price);
+	return catMatch && freqMatch && priceMatch;
+}
 
-	$bindCategoryChangeEvents($panel, listingsData.initialListings);
-	$bindFrequencyChangeEvents($panel, listingsData.initialListings);
-	$bindSliderChangeEvents($panel, listingsData.initialListings);
+(function () {
+	let listingsData = parseAttrJSON(document.querySelector("div[data-react-props]"), "data-react-props"),
+		listings = listingsData.initialListings,
+		categories = listingsData.category_options.slice(1),
+		[minPrice, maxPrice] = findMinMax(listings.map(listing => listing.price_cents));
 
-	document.body.insertBefore($panel, document.querySelector(".header"));
+	let listingsView = new ListingsView(document.querySelector(".newsletterSearch")),
+		$filterEl = parseFragment(panelHTML),
+		filterView = new FilterView($filterEl, categories, minPrice, maxPrice);
+
+	filterView.on("change", (filterState) => {
+		let slugs = listings.filter(listing => listingFilter(filterState, listing)).
+					map(listing => listing.slug);
+		listingsView.hide();
+		listingsView.update(slugs);
+	})
+
+	log("found %d listings", listings.length);
+	document.body.insertBefore($filterEl, document.querySelector(".header"));
 }())

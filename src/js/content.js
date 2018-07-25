@@ -4,6 +4,9 @@
  * the top of any matching page and provide filtering elements.
  */
 
+/**
+ * Static HTML for extension's filter panel.
+ */
 const panelHTML = `
 	<div id="lpext">
 		<div class="title">Filter Listings</div>
@@ -81,7 +84,7 @@ function parseFragment(htmlStr) {
  */
 class ListingsView {
 	/**
-	 * @param {!Element} $el The HTML Element containing all listings
+	 * @param {!Element} $el HTML Element containing all listings
 	 */
 	constructor($el) {
 		this.$el = $el;
@@ -89,7 +92,6 @@ class ListingsView {
 
 	/**
 	 * Hide every listing in the Listings Project view.
-	 * @return void
 	 */
 	hide() {
 		for (let $child of this.$el.querySelectorAll(":scope .search-listings-section > div")) {
@@ -101,7 +103,6 @@ class ListingsView {
 	 * Show any listings with a URI matching a slug from the provided Array. This is
 	 * definitely not an efficient way to do this.
 	 * @param {!Array<string>} slugs An array of slugs
-	 * @return void
 	 */
 	update(slugs) {
 		for (let idx in slugs) {
@@ -113,7 +114,18 @@ class ListingsView {
 	}
 }
 
-function buildPriceSlider($sliderView, minPrice, maxPrice) {
+/**
+ * buildPriceSlider constructs a noUiSlider instance and applies it to a provided
+ * `Element`. The min and max prices are used to construct the range of the slider.
+ * The slider will start stepping in increments of $500 at the 50% mark, all the way
+ * to the max price. The 50% mark is calculated as the minimum value of either $1000
+ * or half of the max price.
+ * @param {!Element} $sliderView An Element instance that will contain the slider
+ * @param {number} minPrice Integer representing min price in cents
+ * @param {number} maxPrice Integer representing max price in cents
+ * @return {object}
+ */
+ function buildPriceSlider($sliderView, minPrice, maxPrice) {
 	noUiSlider.create($sliderView, {
 		start: [maxPrice],
 		connect: [true, false],
@@ -130,8 +142,42 @@ function buildPriceSlider($sliderView, minPrice, maxPrice) {
 	return $sliderView.noUiSlider;
 }
 
-class FilterView {
-	constructor($el, categories, minPrice, maxPrice) {
+/**
+ * A `FilterView` event callback function.
+ *
+ * @callback filterViewEventFn
+ * @param {object} state Current state of filter values.
+ */
+
+/**
+ * `FilterView` provides functionality for this extension's filterable panel. It
+ * currently expects to be able to filter on: category, pay frequency, and max price.
+ * This view assumes it has been provided the panel's top-level DOM Element and
+ * will dynamically:
+ *
+ *  - add options for the categories
+ *  - create the max-price slider
+ *  - make available a change event when any filter is updated
+ *
+ * Thus, to watch for changes to the filters, simply add an event listener to the
+ * `change` event:
+ *
+ * ```
+ * let filterView = new FilterView($el, [{value: "sublet", label: "Sublets"}], 0, 100000);
+ * filterView.on("change", state => { ... });
+ * ```
+ *
+ * The `state` argument in the event will contain the currently chosen values for the
+ * filters as an object: `{category: "sublet", frequency: "all", price: 100000}`.
+ */
+ class FilterView {
+	/**
+	 * @param {!Element} $el HTML Element containing the filters
+	 * @param {!Array<Object<string, string>>} Array of categories with an object having value and label keys
+	 * @param {number} minPrice The min price of all listings in cents
+	 * @param {number} maxPrice The max price of all listings in cents
+	 */
+	 constructor($el, categories, minPrice, maxPrice) {
 		this.$el = $el;
 		this.evFns = {"change": []};
 
@@ -139,18 +185,19 @@ class FilterView {
 		this.frequency = "";
 		this.price = 0;
 
+		let $catSelect = this.$el.querySelector(".filter.categories select");
 		for (let category of categories) {
-			this.addCategory(category.value, category.label);
+			$catSelect.appendChild(parseFragment(`<option value="${category.value}">${category.label}</option>`));
 		}
 
-		this.$slider = buildPriceSlider($el.querySelector(".filter.price .price-slider"), minPrice, maxPrice);
+		let $slider = buildPriceSlider($el.querySelector(".filter.price .price-slider"), minPrice, maxPrice);
 
 		let $maxPrice = $el.querySelector(".max-price");
-		this.$slider.on("update", ([price]) => {
+		$slider.on("update", ([price]) => {
 			$maxPrice.innerHTML = price;
 		});
 
-		this.$slider.on("change", (strs, handles, [value]) => {
+		$slider.on("change", (strs, handles, [value]) => {
 			this.price = Math.trunc(value);
 			this._emit("change");
 		});
@@ -166,18 +213,27 @@ class FilterView {
 		});
 	}
 
-	addCategory(key, label) {
-		this.$el.querySelector(".filter.categories select").
-			appendChild(parseFragment(`<option value="${key}">${label}</option>`));
-	}
-
+	/**
+	 * Adds an event listener function for a named event. All functions should expect to
+	 * receive one argument representing the current state of the filters.
+	 * @param {string} evName The name of the event
+	 * @param {filterViewEventFn} fn A function to execute
+	 * @return {!FilterView}
+	 */
 	on(evName, fn) {
 		if (!this.evFns[evName]) {
 			this.evFns[evName] = [];
 		}
 		this.evFns[evName].push(fn);
+		return this;
 	}
 
+    /**
+     * Emits a named event to all bound listeners. A state object is generated that should
+     * be considered immutable in theory.
+     * @param {string} evName Name of event to emit.
+     * @private
+     */
 	_emit(evName) {
 		let state = {
 			category: this.category,
@@ -188,7 +244,16 @@ class FilterView {
 	}
 }
 
-function listingFilter({category, frequency, price}, listing) {
+/**
+ * listingFilter is a function that will determine if a given listing matches the
+ * rules for the given state of the filter values. If yes, return `true`. This is
+ * best used with an array's `filter` function.
+ * @param {object} state State of current filter values
+ * @param {object} listing A listing object from the Listing Project data
+ * @return {boolean}
+ */
+function listingFilter(state, listing) {
+	let {category, frequency, price} = state;
 	let catMatch = (!category || listing.subcategory_key == category),
 		freqMatch = (!frequency || listing.price_duration == frequency);
 		priceMatch = (!price || listing.price_cents <= price);

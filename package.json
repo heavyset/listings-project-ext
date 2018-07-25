@@ -3,8 +3,8 @@
   "version": "0.0.1",
   "description": "Listings Project helper extension",
   "scripts": {
-    "build": "node utils/build.js",
-    "start": "node utils/webserver.js"
+    "start": "node utils/webserver.js",
+    "build": "node utils/build.js"
   },
   "devDependencies": {
     "clean-webpack-plugin": "^0.1.17",

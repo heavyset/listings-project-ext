@@ -10,6 +10,14 @@ const panelHTML = `
 				<option value="all" selected>All Categories</option>
 			</select>
 		</div>
+		<div class="filter frequency">
+			<select>
+				<option value="all" selected>Any Pay Frequency</option>
+				<option value="/month">Monthly</option>
+				<option value="/week">Weekly</option>
+				<option value="/day">Daily</option>
+			</select>
+		</div>
 		<div class="max-price"></div>
 		<div class="filter price">
 			<div class="price-slider"></div>
@@ -20,6 +28,7 @@ const panelHTML = `
 (function () {
 	let filterState = {
 		category: "",
+		frequency: "",
 		price: ""
 	};
 
@@ -70,18 +79,13 @@ const panelHTML = `
 		}
 	}
 
-	function $showListingsBySlug(slugs) {
+	function $updateListings(slugs) {
 		for (let i in slugs) {
 			let $listing = document.querySelector(`.row a[href*="${slugs[i]}"]`);
 			if ($listing) {
 				$listing.parentNode.parentNode.parentNode.style.display = "";
 			}
 		}
-	}
-
-	function filterBySlugs(slugs) {
-		$hideAllListings();
-		$showListingsBySlug(slugs);
 	}
 
 	function filterListing({category, price}, listing) {
@@ -93,10 +97,17 @@ const panelHTML = `
 	function filterListings(state, listings) {
 		let slugs = listings.filter(listing => filterListing(state, listing)).map(listing => listing.slug);
 		$hideAllListings();
-		$showListingsBySlug(slugs);
+		$updateListings(slugs);
 	}
 
 	function $bindCategoryChangeEvents($panel, listings) {
+		$panel.querySelector(".filter.categories select").addEventListener("change", ({target}) => {
+			let category = target.value == "all" ? "" : target.value;
+			filterListings(applyFilterState({"category": target.value}), listings);
+		});
+	}
+
+	function $bindFrequencyChangeEvents($panel, listings) {
 		$panel.querySelector(".filter.categories select").addEventListener("change", ({target}) => {
 			let category = target.value == "all" ? "" : target.value;
 			filterListings(applyFilterState({"category": target.value}), listings);
@@ -132,10 +143,15 @@ const panelHTML = `
 	let listingsData = parseAttrJSON(document.querySelector("div[data-react-props]"), "data-react-props");
 	log("found %d listings", listingsData.initialListings.length);
 
+	// build filter panel
 	let $panel = $newFrag(panelHTML);
+
 	$updateCategoryFilter($panel, listingsData.category_options);
 	$updatePriceFilter($panel, listingsData.initialListings.map(listing => listing.price_cents));
+
 	$bindCategoryChangeEvents($panel, listingsData.initialListings);
+	$bindFrequencyChangeEvents($panel, listingsData.initialListings);
 	$bindSliderChangeEvents($panel, listingsData.initialListings);
+
 	document.body.insertBefore($panel, document.querySelector(".header"));
 }())

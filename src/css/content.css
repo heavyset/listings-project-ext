@@ -30,7 +30,7 @@
 	text-transform: uppercase;
 	font-weight: bold;
 	color: #444;
-	flex: 0.5;
+	flex: 0.75;
 	margin-top: 1ex;
 }
 
@@ -39,6 +39,17 @@
 }
 
 #lpext .filter.categories select {
+	font-size: 75%;
+	height: 2rem;
+	border-radius: 3px;
+	background-image: unset;
+}
+
+#lpext .filter.frequency {
+	flex: 1;
+}
+
+#lpext .filter.frequency select {
 	font-size: 75%;
 	height: 2rem;
 	border-radius: 3px;

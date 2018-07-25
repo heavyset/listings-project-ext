@@ -1,0 +1,7 @@
+# node and webpack
+node_modules
+build
+secrets.*.js
+
+# miscelleaneous
+tmp/

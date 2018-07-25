@@ -4,12 +4,15 @@
 
 const panelHTML = `
 	<div id="lpext">
-		<h3>Listings Project Filter</h3>
+		<div class="title">Filter Listings</div>
 		<div class="filter categories">
-			<ul></ul>
+			<select>
+				<option value="all" selected>All Categories</option>
+			</select>
 		</div>
-		<div class="filter prices">
-			<div class="slider"></div>
+		<div class="max-price"></div>
+		<div class="filter price">
+			<div class="price-slider"></div>
 		</div>
 	</div>
 `;
@@ -35,20 +38,19 @@ const panelHTML = `
 	}
 
 	function $updateCategoryFilter($panel, categories) {
-		let $list = $panel.querySelector(".filter.categories ul");
+		let $list = $panel.querySelector(".filter.categories select");
 		for (let category of categories.slice(1)) {
-			$list.appendChild($newFrag(`<li class="category" data-category=${category.value}>${category.label}</li>`));
+			$list.appendChild($newFrag(`<option value="${category.value}">${category.label}</option>`));
 		}
 	}
 
 	function $updatePriceFilter($panel, prices) {
 		let minPrice = Math.min(...prices),
 			maxPrice = Math.max(...prices);
-		let $slider = $panel.querySelector(".filter.prices .slider");
+		let $slider = $panel.querySelector(".filter.price .price-slider");
 		noUiSlider.create($slider, {
 			start: [maxPrice],
 			connect: [true, false],
-			tooltips: [true],
 			format: {
 				to: (num) => { return "$" + Math.trunc(num/100) },
 				from: (str) => { return parseInt(str.replace('$', '')) }
@@ -95,16 +97,22 @@ const panelHTML = `
 	}
 
 	function $bindCategoryChangeEvents($panel, listings) {
-		$panel.querySelectorAll(".filter.categories li").forEach($li => {
-			$li.addEventListener("click", ({target}) => {
-				filterListings(applyFilterState({"category": target.dataset.category}), listings);
-			})
+		$panel.querySelector(".filter.categories select").addEventListener("change", ({target}) => {
+			let category = target.value == "all" ? "" : target.value;
+			filterListings(applyFilterState({"category": target.value}), listings);
 		});
 	}
 
 	function $bindSliderChangeEvents($panel, listings) {
-		$panel.querySelector(".slider").noUiSlider.on("change", (strs, handles, [value]) => {
+		let $slider = $panel.querySelector(".filter.price .price-slider").noUiSlider,
+			$maxPrice = $panel.querySelector(".max-price");
+
+		$slider.on("change", (strs, handles, [value]) => {
 			filterListings(applyFilterState({"price": Math.trunc(value)}), listings);
+		});
+
+		$slider.on("update", ([price]) => {
+			$maxPrice.innerHTML = price;
 		});
 	}
 

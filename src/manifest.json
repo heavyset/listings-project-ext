@@ -2,10 +2,11 @@
   "name": "Listings Project Listings Filter",
   "version": "0.0.1",
   "manifest_version": 2,
-  "description": "Adds handy filtering capabilities to all Listings Project newsletter pages.",
+  "description": "Add handy filtering capabilities to all Listings Project newsletter pages.",
   "author": "Gus Knowlden",
   "homepage_url": "https://heavyset.io/",
   "options_page": "options.html",
+  "permissions": ["storage"],
   "background": {
     "page": "background.html"
   },

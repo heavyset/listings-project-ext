@@ -4,11 +4,13 @@
  * the top of any matching page and provide filtering elements.
  */
 
+const STORAGE_ENABLED_KEY = "enabled";
+
 /**
- * Static HTML for extension's filter panel.
+ * Static HTML for extension's filter panel. Default to not being displayed
  */
 const panelHTML = `
-	<div id="lpext">
+	<div id="lpext" style="display: none">
 		<div class="title">Filter Listings</div>
 		<div class="filter categories">
 			<select>
@@ -178,14 +180,13 @@ class ListingsView {
 	 * @param {number} maxPrice The max price of all listings in cents
 	 */
 	 constructor($el, categories, minPrice, maxPrice) {
-		this.$el = $el;
 		this.evFns = {"change": []};
 
 		this.category = "";
 		this.frequency = "";
 		this.price = 0;
 
-		let $catSelect = this.$el.querySelector(".filter.categories select");
+		let $catSelect = $el.querySelector(".filter.categories select");
 		for (let category of categories) {
 			$catSelect.appendChild(parseFragment(`<option value="${category.value}">${category.label}</option>`));
 		}
@@ -211,6 +212,14 @@ class ListingsView {
 			this.frequency = target.value == "all" ? "" : target.value;
 			this._emit("change");
 		});
+	}
+
+	show() {
+		document.querySelector("#lpext").style.display = "";
+	}
+
+	hide() {
+		document.querySelector("#lpext").style.display = "none";
 	}
 
 	/**
@@ -270,6 +279,7 @@ function listingFilter(state, listing) {
 		$filterEl = parseFragment(panelHTML),
 		filterView = new FilterView($filterEl, categories, minPrice, maxPrice);
 
+	// create and display panel
 	filterView.on("change", (filterState) => {
 		let slugs = listings.filter(listing => listingFilter(filterState, listing)).
 					map(listing => listing.slug);
@@ -279,4 +289,24 @@ function listingFilter(state, listing) {
 
 	log("found %d listings", listings.length);
 	document.body.insertBefore($filterEl, document.querySelector(".header"));
+
+	// determine current enabled state
+	chrome.storage.local.get(STORAGE_ENABLED_KEY, state => {
+		let enabled = state[STORAGE_ENABLED_KEY];
+		if (enabled == true || enabled == null) {
+			filterView.show();
+		}
+	});
+
+	// listen for changes to storage in regards to options
+	chrome.storage.onChanged.addListener((changes, namespace) => {
+		if (changes.hasOwnProperty(STORAGE_ENABLED_KEY)) {
+			let enabled = changes[STORAGE_ENABLED_KEY].newValue;
+			if (enabled == true || enabled == null) {
+				filterView.show();
+			} else {
+				filterView.hide();
+			}
+		}
+	});
 }())

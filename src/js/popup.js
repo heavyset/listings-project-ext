@@ -52,7 +52,6 @@ function updateOptions(enabled) {
 	// listen for changes from user
 	document.querySelector(CSS_DISABLE + " a").addEventListener("click", (ev) => {
 		chrome.storage.local.set({[STORAGE_ENABLED_KEY]: false});
-		updateOptions(false);
 	})
 
 	document.querySelector(CSS_ENABLE + " a").addEventListener("click", (ev) => {

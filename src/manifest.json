@@ -5,7 +5,6 @@
   "description": "Add handy filtering capabilities to all Listings Project newsletter pages.",
   "author": "Gus Knowlden",
   "homepage_url": "https://heavyset.io/",
-  "options_page": "options.html",
   "permissions": ["storage"],
   "background": {
     "page": "background.html"

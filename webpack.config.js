@@ -68,6 +68,12 @@ var options = {
           }))
         }
       }, {
+        from: path.join(__dirname, "src", "img", "icon-128.png"),
+        to: "icon-128.png",
+      }, {
+        from: path.join(__dirname, "src", "img", "icon-34.png"),
+        to: "icon-34.png",
+      }, {
         from: path.join(__dirname, "node_modules", "nouislider", "distribute", "nouislider.min.js"),
         to: "nouislider.min.js",
       }, {

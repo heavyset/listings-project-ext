@@ -113,6 +113,8 @@ class ListingsView {
 				$listing.parentNode.parentNode.parentNode.style.display = "";
 			}
 		}
+		// this will help load any images that haven't loaded yet
+		window.scrollTo(0, window.scrollY == 0 ? 1 : 0);
 	}
 }
 
@@ -214,10 +216,16 @@ class ListingsView {
 		});
 	}
 
+	/**
+	 * Show the current filter panel.
+	 */
 	show() {
 		document.querySelector("#lpext").style.display = "";
 	}
 
+	/**
+	 * Hide the current filter panel.
+	 */
 	hide() {
 		document.querySelector("#lpext").style.display = "none";
 	}

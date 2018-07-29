@@ -245,12 +245,12 @@ class ListingsView {
 		return this;
 	}
 
-    /**
-     * Emits a named event to all bound listeners. A state object is generated that should
-     * be considered immutable in theory.
-     * @param {string} evName Name of event to emit.
-     * @private
-     */
+	/**
+	* Emits a named event to all bound listeners. A state object is generated that should
+	* be considered immutable in theory.
+	* @param {string} evName Name of event to emit.
+	* @private
+	*/
 	_emit(evName) {
 		let state = {
 			category: this.category,
